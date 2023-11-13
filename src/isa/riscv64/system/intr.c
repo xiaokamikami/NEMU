@@ -76,6 +76,11 @@ word_t raise_intr(word_t NO, vaddr_t epc) {
     case EX_SPF: difftest_skip_dut(1, 0); break;
   }
 #else
+#ifdef CONFIG_SHARE
+  if(unlikely(dynamic_config.debug_difftest)) {
+      fprintf(stderr, "[NEMU] raise_intr: NO:%lx, epc:%lx\n",NO,epc);
+  }
+#endif
   switch (NO) {
 #ifdef CONFIG_RVH
     case EX_VI:

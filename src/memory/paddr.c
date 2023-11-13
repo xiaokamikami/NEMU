@@ -39,7 +39,11 @@ unsigned long MEMORY_SIZE = CONFIG_MSIZE;
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
+#ifdef CONFIG_NOHYPE_REF
 static uint8_t *pmem = (uint8_t *)PMEMBASE;
+#else
+static const uint8_t *pmem = (uint8_t *)PMEMBASE;
+#endif
 #else
 static uint8_t pmem[CONFIG_MSIZE] PG_ALIGN = {};
 #endif
@@ -99,20 +103,12 @@ static inline void pmem_write(paddr_t addr, int len, word_t data) {
   #endif
 }
 
-static inline void raise_access_fault(int cause, vaddr_t vaddr) {
-  INTR_TVAL_REG(cause) = vaddr;
-  // cpu.amo flag must be reset to false before longjmp_exception,
-  // including longjmp_exception(access fault), longjmp_exception(page fault)
-  cpu.amo = false;
-  longjmp_exception(cause);
+#ifdef CONFIG_NOHYPE_REF
+void init_pmem_offset(int tid){
+  pmem += CONFIG_MSIZE * tid;
+  fprintf(stderr, "pmem now:%lx, tid:%d\n", (uint64_t)pmem, tid);
 }
-
-static inline void raise_read_access_fault(int type, vaddr_t vaddr) {
-  int cause = EX_LAF;
-  if (type == MEM_TYPE_IFETCH || type == MEM_TYPE_IFETCH_READ) { cause = EX_IAF; }
-  else if (cpu.amo || type == MEM_TYPE_WRITE_READ)             { cause = EX_SAF; }
-  raise_access_fault(cause, vaddr);
-}
+#endif
 
 void init_mem() {
 #ifdef CONFIG_USE_MMAP
@@ -154,7 +150,11 @@ void init_mem() {
 /* Memory accessing interfaces */
 
 word_t paddr_read(paddr_t addr, int len, int type, int mode, vaddr_t vaddr) {
-
+#ifdef CONFIG_SHARE
+  if(dynamic_config.debug_difftest) {
+    fprintf(stderr, "[NEMU]  paddr read addr:" FMT_PADDR " len:%d type:%d mode:%d\n", addr, len, type, mode);
+  }
+#endif
 
   assert(type == MEM_TYPE_READ || type == MEM_TYPE_IFETCH_READ || type == MEM_TYPE_IFETCH || type == MEM_TYPE_WRITE_READ);
   if (!isa_pmp_check_permission(addr, len, type, mode)) {
@@ -184,8 +184,11 @@ word_t paddr_read(paddr_t addr, int len, int type, int mode, vaddr_t vaddr) {
 #endif
     if(dynamic_config.ignore_illegal_mem_access)
       return 0;
-    printf("ERROR: invalid mem read from paddr " FMT_PADDR ", NEMU raise access exception\n", addr);
-    raise_read_access_fault(type, vaddr);
+#if defined(CONFIG_HAS_FLASH) || defined(CONFIG_HAS_SDCARD)
+    return mmio_read(addr, len);
+#endif
+    printf("ERROR: invalid mem read from paddr " FMT_PADDR ", NEMU raise illegal inst exception\n", addr);
+    longjmp_exception(EX_II);
   }
   return 0;
 #endif
@@ -264,7 +267,10 @@ void paddr_write(paddr_t addr, int len, word_t data, int mode, vaddr_t vaddr) {
     else {
       if(dynamic_config.ignore_illegal_mem_access)
         return;
-      printf("ERROR: invalid mem write to paddr " FMT_PADDR ", NEMU raise access exception\n", addr);
+#if defined(CONFIG_HAS_SDCARD)
+    return mmio_write(addr, len, data);
+#endif
+    printf("ERROR: invalid mem write to paddr " FMT_PADDR ", NEMU raise access exception\n", addr);
       raise_access_fault(EX_SAF, vaddr);
       return;
     }

@@ -272,6 +272,13 @@ CSR_STRUCT_START(mip)
   uint64_t sgeip: 1;
 CSR_STRUCT_END(mip)
 
+CSR_STRUCT_START(minstret)
+CSR_STRUCT_END(minstret)
+
+CSR_STRUCT_START(mcycle)
+CSR_STRUCT_END(mcycle)
+
+
 /** pmp */
 
 #define PMP_R     0x01

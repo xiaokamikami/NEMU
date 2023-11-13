@@ -222,6 +222,27 @@ void difftest_init() {
 #endif
 }
 
+#ifdef CONFIG_NOHYPE_REF
+void difftest_nohype_init(int tid) {
+  init_pmem_offset(tid);
+  init_mem();
+
+  /* Perform ISA dependent initialization. */
+  init_isa();
+  /* create dummy address space for serial */
+  //add_mmio_map("difftest.serial", 0xa10003f8, new_space(8), 8, NULL);
+
+#ifdef CONFIG_SHARE
+  dynamic_config.debug_difftest = false;
+#endif
+}
+#endif
+
+void difftest_sdcard_init(const char* img_path,const char* sd_cpt_bin_path) {
+  extern void difftest_set_sdcard(const char* img_path,const char* sd_cpt_bin_path);
+  difftest_set_sdcard(img_path,sd_cpt_bin_path);
+}
+
 void difftest_display() {
   isa_reg_display();
 }
