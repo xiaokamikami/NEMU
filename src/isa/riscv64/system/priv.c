@@ -443,14 +443,14 @@ static inline void csr_write(word_t *dest, word_t src) {
   }
   else if (is_write(sip)) { mip->val = mask_bitset(mip->val, ((cpu.mode == MODE_S) ? SIP_WMASK_S : SIP_MASK), src); }
   else if (is_write(mtvec)) {
-#ifdef CONFIG_XTVEC_VECTORED_MODE
+#if defined  (CONFIG_XTVEC_VECTORED_MODE) || (CONFIG_SHARE)
     *dest = src & ~(0x2UL);
 #else
     *dest = src & ~(0x3UL);
 #endif // CONFIG_XTVEC_VECTORED_MODE
 }
   else if (is_write(stvec)) {
-#ifdef CONFIG_XTVEC_VECTORED_MODE
+#if defined  (CONFIG_XTVEC_VECTORED_MODE) || (CONFIG_SHARE)
     *dest = src & ~(0x2UL);
 #else
     *dest = src & ~(0x3UL);

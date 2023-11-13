@@ -92,9 +92,16 @@ void isa_reg_display() {
   extern const char * vregsl[];
   for(i = 0; i < 32; i ++) {
     printf("%s: ", vregsl[i]);
-    printf("0x%016lx_%016lx  ",
-      cpu.vr[i]._64[1], cpu.vr[i]._64[0]);
-    if(i%2) printf("\n");
+    for (int j = VENUM64 - 1; j >= 0; j --) {
+      printf("0x%016lx", cpu.vr[i]._64[j]);
+        if ( j != 0 ) {
+          printf("_");
+        }
+        else {
+          printf("\t");
+        }
+    }
+    if( i % 2 ) printf("\n");
   }
   printf("vtype: " FMT_WORD " vstart: " FMT_WORD " vxsat: " FMT_WORD "\n", vtype->val, vstart->val, vxsat->val);
   printf("vxrm: " FMT_WORD " vl: " FMT_WORD " vcsr: " FMT_WORD "\n", vxrm->val, vl->val, vcsr->val);

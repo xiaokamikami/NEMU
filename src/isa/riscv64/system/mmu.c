@@ -334,6 +334,7 @@ static paddr_t ptw(vaddr_t vaddr, int type) {
     pte.a = true;
     pte.d |= is_write;
     paddr_write(p_pte, PTE_SIZE, pte.val, cpu.mode, vaddr);
+  }
   if (!pte.a || (!pte.d && is_write)) {
     // pte.a = true;
     // pte.d |= is_write;

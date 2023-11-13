@@ -43,7 +43,7 @@ enum { DIFFTEST_TO_DUT, DIFFTEST_TO_REF };
 #endif //RV64_FULL_DIFF
 
 #if defined (RV64_FULL_DIFF) && defined (CONFIG_RVV)
-#define RVV_EXT_REG_SIZE (sizeof(uint64_t) * (64 + 7))
+#define RVV_EXT_REG_SIZE (sizeof(uint64_t) * (32 * VENUM64 + 7))
 #else
 #define RVV_EXT_REG_SIZE 0
 #endif //CONFIG_RVV

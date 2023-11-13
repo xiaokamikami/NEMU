@@ -39,11 +39,7 @@ unsigned long MEMORY_SIZE = CONFIG_MSIZE;
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
-#ifdef CONFIG_NOHYPE_REF
 static uint8_t *pmem = (uint8_t *)PMEMBASE;
-#else
-static const uint8_t *pmem = (uint8_t *)PMEMBASE;
-#endif
 #else
 static uint8_t pmem[CONFIG_MSIZE] PG_ALIGN = {};
 #endif
@@ -109,7 +105,20 @@ void init_pmem_offset(int tid){
   fprintf(stderr, "pmem now:%lx, tid:%d\n", (uint64_t)pmem, tid);
 }
 #endif
+static inline void raise_access_fault(int cause, vaddr_t vaddr) {
+  INTR_TVAL_REG(cause) = vaddr;
+  // cpu.amo flag must be reset to false before longjmp_exception,
+  // including longjmp_exception(access fault), longjmp_exception(page fault)
+  cpu.amo = false;
+  longjmp_exception(cause);
+}
 
+static inline void raise_read_access_fault(int type, vaddr_t vaddr) {
+  int cause = EX_LAF;
+  if (type == MEM_TYPE_IFETCH || type == MEM_TYPE_IFETCH_READ) { cause = EX_IAF; }
+  else if (cpu.amo || type == MEM_TYPE_WRITE_READ)             { cause = EX_SAF; }
+  raise_access_fault(cause, vaddr);
+}
 void init_mem() {
 #ifdef CONFIG_USE_MMAP
   #ifdef CONFIG_MULTICORE_DIFF
@@ -159,10 +168,26 @@ word_t paddr_read(paddr_t addr, int len, int type, int mode, vaddr_t vaddr) {
   assert(type == MEM_TYPE_READ || type == MEM_TYPE_IFETCH_READ || type == MEM_TYPE_IFETCH || type == MEM_TYPE_WRITE_READ);
   if (!isa_pmp_check_permission(addr, len, type, mode)) {
     Log("isa pmp check failed");
-    raise_read_access_fault(type, vaddr);
+    #ifdef CONFIG_SHARE
+      if (type == MEM_TYPE_IFETCH || type == MEM_TYPE_IFETCH_READ) {
+        INTR_TVAL_REG(EX_IAF) = vaddr;
+        longjmp_exception(EX_IAF);
+        return false;
+      } else if (cpu.amo || type == MEM_TYPE_WRITE_READ) {
+        INTR_TVAL_REG(EX_SAF) = vaddr;
+        longjmp_exception(EX_SAF);
+        return false;
+      } else {
+        INTR_TVAL_REG(EX_LAF) = vaddr;
+        longjmp_exception(EX_LAF);
+        return false;
+      }
+    #else
+      raise_read_access_fault(type, vaddr);
+    #endif
     return 0;
   }
-#if true
+#if CONFIG_SHARE
   if (likely(in_pmem(addr))) return pmem_read(addr, len);
   else {
     if (likely(is_in_mmio(addr))) return mmio_read(addr, len);
@@ -188,7 +213,11 @@ word_t paddr_read(paddr_t addr, int len, int type, int mode, vaddr_t vaddr) {
     return mmio_read(addr, len);
 #endif
     printf("ERROR: invalid mem read from paddr " FMT_PADDR ", NEMU raise illegal inst exception\n", addr);
-    longjmp_exception(EX_II);
+    #ifdef CONFIG_SHARE
+      longjmp_exception(EX_II);
+    #else
+      raise_read_access_fault(type, vaddr);
+    #endif
   }
   return 0;
 #endif
@@ -245,7 +274,7 @@ void paddr_write(paddr_t addr, int len, word_t data, int mode, vaddr_t vaddr) {
     raise_access_fault(EX_SAF, vaddr);
     return ;
   }
-#ifdef CONFIG_SHARE
+#ifndef CONFIG_SHARE
   if (likely(in_pmem(addr))) {
     #ifdef CONFIG_LIGHTQS
     pmem_record_store(addr);
@@ -271,7 +300,11 @@ void paddr_write(paddr_t addr, int len, word_t data, int mode, vaddr_t vaddr) {
     return mmio_write(addr, len, data);
 #endif
     printf("ERROR: invalid mem write to paddr " FMT_PADDR ", NEMU raise access exception\n", addr);
+    #ifdef CONFIG_SHARE
+      longjmp_exception(EX_II);
+    #else
       raise_access_fault(EX_SAF, vaddr);
+    #endif
       return;
     }
   }
